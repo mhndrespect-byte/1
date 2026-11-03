@@ -73,17 +73,22 @@ trigger_next() {
     return 1
 }
 
+# ⚡ دالة البث المباشر: فيديو نسخ أصلي + صوت معالج (نقي وواضح)
 run_stream() {
     local duration="$1" url="$2"
     timeout "${duration}s" ffmpeg -y -hide_banner -loglevel warning \
         -reconnect 1 -reconnect_streamed 1 -reconnect_at_eof 1 -reconnect_delay_max 2 \
         -rw_timeout 10000000 \
         -i "$url" \
-        -c copy \
+        -map 0:v:0 -map 0:a:0? \
+        -c:v copy \
+        -c:a aac -b:a 192k -ar 48000 -ac 2 \
+        -af "highpass=f=90,loudnorm=I=-16:TP=-1.5:LRA=11" \
         -f flv "${RESTREAM_URL}/${RESTREAM_KEY}" 2>/dev/null &
     echo $!
 }
 
+# دالة شاشة الانتظار: تحديث التردد إلى 48000Hz
 run_placeholder() {
     local duration="$1"
     if [ ! -f "$PLACEHOLDER_IMAGE" ]; then
@@ -92,10 +97,10 @@ run_placeholder() {
     fi
     timeout "${duration}s" ffmpeg -y -hide_banner -loglevel error \
         -re -loop 1 -framerate 30 -i "$PLACEHOLDER_IMAGE" \
-        -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
+        -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 \
         -c:v libx264 -preset veryfast -tune stillimage -pix_fmt yuv420p \
         -g 60 -b:v 2500k -maxrate 2500k -bufsize 5000k \
-        -c:a aac -b:a 128k -ar 44100 \
+        -c:a aac -b:a 128k -ar 48000 -ac 2 \
         -shortest -f flv "${RESTREAM_URL}/${RESTREAM_KEY}" 2>/dev/null &
     echo $!
 }
@@ -129,7 +134,7 @@ while true; do
         echo "[$(date)] القناة غير متصلة. عرض شاشة الانتظار لـ ${SEG} ثانية."
         FF_PID=$(run_placeholder "$SEG") || FF_PID=""
     else
-        echo "[$(date)] القناة متصلة. بدء النسخ المباشر (متبقي ${REMAINING} ثانية)."
+        echo "[$(date)] القناة متصلة. بدء النسخ المباشر مع تحسين الصوت (متبقي ${REMAINING} ثانية)."
         FF_PID=$(run_stream "$REMAINING" "$STREAM_URL")
     fi
 
