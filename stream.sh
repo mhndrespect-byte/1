@@ -73,7 +73,7 @@ trigger_next() {
     return 1
 }
 
-# ⚡ دالة البث المباشر: فيديو نسخ أصلي + صوت معالج (نقي وواضح)
+# ⚡ دالة البث المباشر (تم تطبيق إعدادات الصوت لحل الخرخشة)
 run_stream() {
     local duration="$1" url="$2"
     timeout "${duration}s" ffmpeg -y -hide_banner -loglevel warning \
@@ -82,13 +82,12 @@ run_stream() {
         -i "$url" \
         -map 0:v:0 -map 0:a:0? \
         -c:v copy \
-        -c:a aac -b:a 192k -ar 48000 -ac 2 \
-        -af "highpass=f=90,loudnorm=I=-16:TP=-1.5:LRA=11" \
+        -c:a aac -b:a 192k -ar 48000 -ac 2 -af "aresample=async=1" \
         -f flv "${RESTREAM_URL}/${RESTREAM_KEY}" 2>/dev/null &
     echo $!
 }
 
-# دالة شاشة الانتظار: تحديث التردد إلى 48000Hz
+# دالة شاشة الانتظار (تم توحيد التردد إلى 48000)
 run_placeholder() {
     local duration="$1"
     if [ ! -f "$PLACEHOLDER_IMAGE" ]; then
@@ -134,7 +133,7 @@ while true; do
         echo "[$(date)] القناة غير متصلة. عرض شاشة الانتظار لـ ${SEG} ثانية."
         FF_PID=$(run_placeholder "$SEG") || FF_PID=""
     else
-        echo "[$(date)] القناة متصلة. بدء النسخ المباشر مع تحسين الصوت (متبقي ${REMAINING} ثانية)."
+        echo "[$(date)] القناة متصلة. بدء النسخ المباشر مع تثبيت الصوت (متبقي ${REMAINING} ثانية)."
         FF_PID=$(run_stream "$REMAINING" "$STREAM_URL")
     fi
 
