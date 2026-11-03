@@ -10,8 +10,9 @@ RESTREAM_KEY="${RESTREAM_KEY:?RESTREAM_KEY required}"
 RESTREAM_URL="${RESTREAM_URL:-rtmp://live.restream.io/live}"
 PLACEHOLDER_IMAGE="${PLACEHOLDER_IMAGE:-placeholder.png}"
 
-MAX_STREAM_SEC=19200      # 320 دقيقة (وقت الخروج)
-TRIGGER_AT_SEC=18000      # 300 دقيقة (وقت إطلاق الرن التالي)
+# إعدادات التوقيت (السلسلة اللانهائية)
+MAX_STREAM_SEC=19800      # 330 دقيقة = 5.5 ساعات (وقت خروج الرن)
+TRIGGER_AT_SEC=18000      # 300 دقيقة = 5 ساعات (وقت إطلاق الرن التالي)
 START_TS=$(date +%s)
 
 # ==========================================
@@ -30,17 +31,17 @@ count_chain() {
     echo "$1" | grep ":repository_dispatch:" | wc -l | tr -d ' '
 }
 
-# إذا كان هذا الرن (Cron أو يدوي) وهناك سلسلة نشطة، انسحب فوراً لتجنب التداخل
+# إذا كان هذا الرن (يدوي أو كرون) وهناك سلسلة نشطة، انسحب فوراً لمنع التكرار
 if [ "${TRIGGER_TYPE}" != "repository_dispatch" ]; then
     INITIAL=$(get_active_runs)
     if [ "$(count_chain "$INITIAL")" -gt 0 ]; then
-        echo "[$(date)] هناك سلسلة نشطة بالفعل. سيتم الإلغاء لتجنب التكرار."
+        echo "[$(date)] هناك سلسلة نشطة بالفعل. سيتم الإلغاء لتجنب التداخل."
         exit 0
     fi
 fi
 
-# انتظر حتى يخلو الجو من أي رن آخر
-echo "[$(date)] جاري فحص الرنات السابقة..."
+# انتظر حتى يخلو الجو من الرن السابق (لحظة التسليم)
+echo "[$(date)] جاري فحص الرن السابق..."
 while true; do
     ACTIVE=$(get_active_runs)
     if [ -z "$ACTIVE" ]; then
@@ -51,10 +52,10 @@ while true; do
 done
 
 # ==========================================
-# 2. منطق البث (Streaming)
+# 2. منطق البث والإطلاق
 # ==========================================
 trigger_next() {
-    echo "[$(date)] جاري إطلاق الرن التالي..."
+    echo "[$(date)] جاري إطلاق الرن التالي في الخلفية..."
     for attempt in $(seq 1 10); do
         CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
@@ -106,19 +107,20 @@ while true; do
     NOW=$(date +%s)
     ELAPSED=$((NOW - START_TS))
 
-    # الخروج عند الوصول للحد الأقصى
+    # 1. الخروج عند الوصول للحد الأقصى (5.5 ساعات)
     if [ "$ELAPSED" -ge "$MAX_STREAM_SEC" ]; then
-        echo "[$(date)] وصلنا للحد الأقصى. إيقاف البث."
+        echo "[$(date)] وصلنا للحد الأقصى (5.5 ساعات). إيقاف البث لهذا الرن وتسليم المهمة."
         break
     fi
 
-    # إطلاق الرن التالي في الدقيقة 300
+    # 2. إطلاق الرن التالي عند الدقيقة 300 (5 ساعات)
     if [ "$TRIGGER_ATTEMPTED" -eq 0 ] && [ "$ELAPSED" -ge "$TRIGGER_AT_SEC" ]; then
         TRIGGER_ATTEMPTED=1
         trigger_next &
         TRIGGER_PID=$!
     fi
 
+    # 3. تشغيل البث أو شاشة الانتظار
     REMAINING=$((MAX_STREAM_SEC - ELAPSED))
     STREAM_URL=$(yt-dlp -g --no-warnings "https://kick.com/${KICK_CHANNEL}" 2>/dev/null | head -n 1)
 
@@ -137,7 +139,7 @@ while true; do
         continue
     fi
 
-    # مراقبة ffmpeg
+    # مراقبة البث
     while kill -0 "$FF_PID" 2>/dev/null; do
         NOW=$(date +%s)
         if [ $((NOW - START_TS)) -ge "$MAX_STREAM_SEC" ]; then
@@ -154,13 +156,13 @@ while true; do
     fi
 done
 
-# في حال لم يتم إطلاق الرن التالي، أطلقه الآن
+# تأكيد إطلاق الرن التالي قبل الخروج النهائي
 if [ -n "$TRIGGER_PID" ]; then
     wait "$TRIGGER_PID" 2>/dev/null || true
 fi
 
 if [ "$TRIGGER_ATTEMPTED" -eq 0 ]; then
-    trigger_next || echo "[$(date)] فشل إطلاق الرن الأخير!"
+    trigger_next || echo "[$(date)] فشل إطلاق الرن الأخير! النظام سيعتمد على الكرون."
 fi
 
 exit 0
