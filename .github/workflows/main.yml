@@ -5,7 +5,7 @@ on:
   repository_dispatch:
     types: [chain-trigger]
   schedule:
-    - cron: '0 */6 * * *'   # احتياطي في حال فشل التسلسل التلقائي
+    - cron: '0 */6 * * *'   # احتياطي في حال فشل التسلسل التلقائي لأي سبب طارئ
 
 permissions:
   actions: write
