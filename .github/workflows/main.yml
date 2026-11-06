@@ -3,7 +3,7 @@ name: Single Streamer 24-7
 # ⬇️⬇️⬇️ المكان الوحيد اللي تعدل فيه ⬇️⬇️⬇️
 env:
   RESTREAM_KEY: 're_11725544_event1f24e3174647428d86fc1329252bbf36'
-  STREAMER_EN: 'sxb'      # يوزر الستريمر في كيك
+  STREAMER_EN: 'SXB'      # يوزر الستريمر في كيك
   STREAMER_AR: 'شونق بونق'      # الاسم اللي يطلع في شاشة الانتظار
 # ⬆️⬆️⬆️ المكان الوحيد اللي تعدل فيه ⬆️⬆️⬆️
 
@@ -39,15 +39,17 @@ jobs:
           set -e
           sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update -qq
+          # تنصيب ffmpeg مع دعم اللغة العربية (libfribidi, libraqm)
           sudo apt-get install -y --no-install-recommends ffmpeg fontconfig libraqm0 libfribidi0
           pip3 install --user --break-system-packages --quiet streamlink Pillow
+          
           mkdir -p ~/.fonts
           curl -sL --max-time 30 "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf" -o ~/.fonts/Cairo-var.ttf || true
           curl -sL --max-time 30 "https://raw.githubusercontent.com/google/fonts/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf" -o ~/.fonts/Orbitron-var.ttf || true
           fc-cache -f >/dev/null 2>&1 || true
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Pre-build standby
+      - name: Pre-build standby & frame
         run: |
           chmod +x stream.sh
           PREPARE_ONLY=1 ./stream.sh
