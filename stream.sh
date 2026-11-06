@@ -3,11 +3,11 @@ set +m
 set -uo pipefail
 
 # ═══════════════════════════════════════════════════════════════
-#  Single Streamer Relay — V15 (Custom Frame + Marquee Text)
+#  Single Streamer Relay — V16 (Ultimate HTML Frame Overlay)
 # ═══════════════════════════════════════════════════════════════
 
 STREAMER_EN="${STREAMER_EN:-SXB}"
-STREAMER_AR="${STREAMER_AR:-شونق}"
+STREAMER_AR="${STREAMER_AR:-شونق بونق}"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 WORKDIR="/tmp/standby_relay"
@@ -98,66 +98,85 @@ PYEOF
 }
 
 generate_frame_bg() {
-    echo "🖼️ Generating Live Frame Overlay..."
+    echo "🖼️ Generating Live Frame Overlay using HTML & Playwright..."
+    
+    # 1. حفظ التصميم (HTML) اللي عجبك
+    cat > /tmp/frame.html <<'HTMLEOF'
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: transparent; margin: 0; padding: 0; overflow: hidden; font-family: 'Cairo', sans-serif; }
+        .stream-container { position: relative; width: 1920px; height: 1080px; background: transparent; overflow: hidden; }
+        .inner-border { position: absolute; inset: 0; border: 6px solid #990000; pointer-events: none; z-index: 10; box-shadow: inset 0 0 30px rgba(255, 0, 0, 0.6); }
+        .top-bar { position: absolute; top: 0; left: 0; right: 0; height: 15%; background: linear-gradient(to bottom, #000000 0%, #1a0000 100%); border-bottom: 4px solid #ff0000; display: flex; justify-content: center; align-items: center; z-index: 20; clip-path: polygon(0 0, 100% 0, 100% 85%, 95% 100%, 5% 100%, 0 85%); }
+        .title-text { font-size: 64px; font-weight: 900; color: #fff; display: flex; gap: 15px; letter-spacing: 1px; text-shadow: 2px 2px 0 #000, 0 0 15px rgba(255,0,0,0.8); }
+        .title-text span { color: #ff0000; text-shadow: 2px 2px 0 #000, 0 0 20px #ff0000; }
+        .prison-bars { position: absolute; left: 2%; top: 20%; height: 60%; width: 80px; display: flex; justify-content: space-between; opacity: 0.7; }
+        .prison-bars::before, .prison-bars::after, .prison-bars div { content: ''; width: 4px; height: 100%; background: linear-gradient(to bottom, #555, #222); border-radius: 2px; }
+        .handcuffs { position: absolute; right: 3%; top: 25%; width: 80px; height: 40px; display: flex; align-items: center; justify-content: space-between; opacity: 0.8; }
+        .cuff { width: 35px; height: 35px; border: 5px solid #888; border-radius: 50%; box-shadow: inset 0 0 5px #000; }
+        .cuff-chain { width: 10px; height: 4px; background: #888; }
+        .bottom-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 10%; background: #000; border-top: 4px solid #ff0000; z-index: 20; clip-path: polygon(5% 0, 95% 0, 100% 100%, 0 100%); }
+        .corner-accent { position: absolute; bottom: 10%; width: 40px; height: 40px; border: 4px solid #ff0000; z-index: 15; }
+        .corner-accent.left { left: 0; border-right: none; border-top: none; }
+        .corner-accent.right { right: 0; border-left: none; border-top: none; }
+    </style>
+</head>
+<body>
+    <div class="stream-container">
+        <div class="inner-border"></div>
+        <div class="corner-accent left"></div>
+        <div class="corner-accent right"></div>
+        <div class="top-bar">
+            <div class="prison-bars"><div></div><div></div></div>
+            <div class="title-text">بث السجن <span>30 يوم!</span></div>
+            <div class="handcuffs"><div class="cuff"></div><div class="cuff-chain"></div><div class="cuff"></div></div>
+        </div>
+        <div class="bottom-bar"></div>
+    </div>
+</body>
+</html>
+HTMLEOF
+
+    # 2. توليد الصورة الشفافة من HTML + توليد النص المتحرك
     cat > /tmp/make_frame.py <<'PYEOF'
 import os
+from playwright.sync_api import sync_playwright
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1920, 1080
 WORKDIR = os.environ.get("WORKDIR", "/tmp/standby_relay")
 
-def get_font(path, size, weight=700):
-    try:
-        f = ImageFont.truetype(path, size)
-        axes = f.get_variation_axes()
-        if len(axes) == 1:
-            f.set_variation_by_axes([weight])
-        elif len(axes) == 2:
-            f.set_variation_by_axes([0, weight])
-        return f
-    except Exception:
-        return ImageFont.load_default()
+# أ) تحويل التصميم لصورة شفافة
+print("Rendering HTML frame via Playwright...")
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page(viewport={'width': 1920, 'height': 1080})
+    page.goto("file:///tmp/frame.html")
+    page.screenshot(path=os.path.join(WORKDIR, "frame_bg.png"), omit_background=True)
+    browser.close()
 
-# خلفية شفافة تماماً
-bg = Image.new("RGBA", (W, H), (0,0,0,0))
-d = ImageDraw.Draw(bg)
+# ب) توليد صورة النص المتحرك
+print("Generating marquee text...")
+font_path = os.path.expanduser("~/.fonts/Cairo-var.ttf")
+font = ImageFont.truetype(font_path, 45)
+text = "تكبيس وفولو يارجال  |  والبث مايوقف!  |  تكبيس وفولو يارجال  |  والبث مايوقف!  |  "
 
-# 1. الشريط العلوي (أسود بانحناءات)
-d.polygon([(0,0), (W,0), (W,180), (W-50,200), (50,200), (0,180)], fill=(10, 0, 0, 255))
-# الخط الأحمر أسفل الشريط العلوي
-d.line([(50,200), (W-50,200)], fill=(255,0,0,255), width=6)
+dummy = Image.new("RGBA", (1, 1))
+d = ImageDraw.Draw(dummy)
+bbox = d.textbbox((0, 0), text, font=font, direction="rtl")
+text_width = bbox[2] - bbox[0]
 
-# 2. الشريط السفلي
-d.polygon([(0,H), (W,H), (W,H-120), (W-50,H-140), (50,H-140), (0,H-120)], fill=(0, 0, 0, 255))
-# الخط الأحمر أعلى الشريط السفلي
-d.line([(50,H-140), (W-50,H-140)], fill=(255,0,0,255), width=6)
-
-# 3. إطار أحمر خارجي
-d.rectangle([(10, 10), (W-10, H-10)], outline=(255,0,0,200), width=6)
-
-# 4. زخارف الزوايا السفلية
-d.line([(10,H-140), (10,H-80), (60,H-80)], fill=(255,0,0,255), width=6)
-d.line([(W-10,H-140), (W-10,H-80), (W-60,H-80)], fill=(255,0,0,255), width=6)
-
-# 5. النص العلوي "بث السجن 30 يوم!"
-f_top = get_font(os.path.expanduser("~/.fonts/Cairo-var.ttf"), 80, 900)
-top_text = "بث السجن 30 يوم!"
-d.text((W//2, 100), top_text, font=f_top, fill=(255,255,255,255), anchor="mm")
-
-# 6. قضبان السجن (يسار)
-for i in range(3):
-    x = 100 + i * 20
-    d.line([(x, 40), (x, 160)], fill=(150, 150, 150, 255), width=4)
-
-# 7. الأصفاد (يمين)
-d.ellipse([(W-200, 50), (W-150, 100)], outline=(150, 150, 150, 255), width=6)
-d.ellipse([(W-120, 50), (W-70, 100)], outline=(150, 150, 150, 255), width=6)
-d.line([(W-150, 75), (W-120, 75)], fill=(150, 150, 150, 255), width=6)
-
-bg.save(os.path.join(WORKDIR, "frame_bg.png"), "PNG")
+img = Image.new("RGBA", (text_width + 200, 80), (0,0,0,0))
+d = ImageDraw.Draw(img)
+d.text((100, 10), text, font=font, fill=(255,255,255,255), direction="rtl")
+img.save(os.path.join(WORKDIR, "marquee.png"))
 PYEOF
+
     WORKDIR="$WORKDIR" python3 /tmp/make_frame.py || return 1
-    echo "✅ Live Frame ready"
+    echo "✅ Live Frame & Marquee ready"
 }
 
 if [ "${PREPARE_ONLY:-0}" = "1" ]; then
@@ -306,7 +325,7 @@ start_prod_live() {
     rm -f /tmp/prod.prog
     echo "🚀 Starting LIVE with Frame Overlay..."
     
-    # دمج البث مع الإطار الصوري + النص المتحرك في الأسفل
+    # دمج البث مع الإطار الصوري + النص المتحرك (marquee.png)
     setsid bash -c '
         streamlink --http-header "User-Agent='"$UA"'" "https://kick.com/'"$STREAMER_EN"'" best --stdout 2>/dev/null | \
         ffmpeg -y -hide_banner -loglevel warning -nostdin \
@@ -314,10 +333,11 @@ start_prod_live() {
             -fflags +genpts+discardcorrupt \
             -i pipe:0 \
             -loop 1 -i "'"$WORKDIR"'/frame_bg.png" \
+            -loop 1 -i "'"$WORKDIR"'/marquee.png" \
             -filter_complex "\
                 [0:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2[v0]; \
                 [v0][1:v]overlay=0:0[bg]; \
-                [bg]drawtext=fontfile=$HOME/.fonts/Cairo-var.ttf:text='"'"'تكبيس وفولو يارجال  |  والبث مايوقف!  |  تكبيس وفولو يارجال  |  والبث مايوقف!  |  '"'"':x=w-mod(t*150\,w+tw):y=h-105:fontsize=45:fontcolor=white:borderw=2:bordercolor=black[out]" \
+                [bg][2:v]overlay=x='"'"'W-mod(t*200\,W+overlay_w)'"'"':y=H-95[out]" \
             -map "[out]" -map 0:a? \
             -c:v libx264 -preset ultrafast -tune zerolatency -crf 24 -pix_fmt yuv420p \
             -c:a aac -b:a 160k -ar 44100 -ac 2 \
@@ -379,7 +399,7 @@ fi
 # ───────────────────────────────────────────────
 #  Boot
 # ───────────────────────────────────────────────
-echo "🚀 Single Streamer Relay V15 starting..."
+echo "🚀 Single Streamer Relay V16 starting..."
 setup_fifo
 start_output_with_retry || { echo "❌ FATAL: initial connect failed"; exit 1; }
 start_keeper || { echo "❌ FATAL: keeper failed"; exit 1; }
