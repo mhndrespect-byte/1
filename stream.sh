@@ -3,11 +3,11 @@ set +m
 set -uo pipefail
 
 # ═══════════════════════════════════════════════════════════════
-#  Single Streamer Relay — V13 (Anti-Ban Standby + Live Motion)
+#  Single Streamer Relay — V15 (Custom Frame + Marquee Text)
 # ═══════════════════════════════════════════════════════════════
 
-STREAMER_EN="${STREAMER_EN:-SXB}"
-STREAMER_AR="${STREAMER_AR:-شونق}"
+STREAMER_EN="${STREAMER_EN:-DRB7H}"
+STREAMER_AR="${STREAMER_AR:-دربحه}"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 WORKDIR="/tmp/standby_relay"
@@ -17,7 +17,7 @@ mkdir -p "$WORKDIR"
 export STREAMER_EN STREAMER_AR WORKDIR
 
 # ───────────────────────────────────────────────
-#  Anti-Ban Standby Generation
+#  Standby & Frame Generation
 # ───────────────────────────────────────────────
 generate_standby() {
     echo "🎨 Generating animated standby screen for $STREAMER_EN ($STREAMER_AR)..."
@@ -30,7 +30,6 @@ generate_standby() {
         -o ~/.fonts/Orbitron-var.ttf || true
     fc-cache -f >/dev/null 2>&1 || true
 
-    # 1. رسم الخلفية الأساسية (بدون نصوص متحركة)
     cat > /tmp/make_ui.py <<'PYEOF'
 import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -83,11 +82,6 @@ PYEOF
     WORKDIR="$WORKDIR" python3 /tmp/make_ui.py || return 1
 
     echo "🎬 Rendering motion video (60s loop)..."
-    # 2. تحويل الصورة إلى فيديو فيه حركة، مؤقت، نص متحرك، وصوت
-    # zoompan: حركة الزووم البطيئة
-    # pts:hms: مؤقت يتحرك بالثواني
-    # x=w-mod(t*150,w+tw): نص يتحرك من اليمين لليسار
-    # anoisesrc: صوت وشوشة خفيفة
     ffmpeg -y -hide_banner -loglevel warning \
         -loop 1 -framerate 60 -i "$WORKDIR/bg.png" \
         -f lavfi -i "anoisesrc=c=brown:r=44100:a=0.05" \
@@ -103,8 +97,72 @@ PYEOF
     return 0
 }
 
+generate_frame_bg() {
+    echo "🖼️ Generating Live Frame Overlay..."
+    cat > /tmp/make_frame.py <<'PYEOF'
+import os
+from PIL import Image, ImageDraw, ImageFont
+
+W, H = 1920, 1080
+WORKDIR = os.environ.get("WORKDIR", "/tmp/standby_relay")
+
+def get_font(path, size, weight=700):
+    try:
+        f = ImageFont.truetype(path, size)
+        axes = f.get_variation_axes()
+        if len(axes) == 1:
+            f.set_variation_by_axes([weight])
+        elif len(axes) == 2:
+            f.set_variation_by_axes([0, weight])
+        return f
+    except Exception:
+        return ImageFont.load_default()
+
+# خلفية شفافة تماماً
+bg = Image.new("RGBA", (W, H), (0,0,0,0))
+d = ImageDraw.Draw(bg)
+
+# 1. الشريط العلوي (أسود بانحناءات)
+d.polygon([(0,0), (W,0), (W,180), (W-50,200), (50,200), (0,180)], fill=(10, 0, 0, 255))
+# الخط الأحمر أسفل الشريط العلوي
+d.line([(50,200), (W-50,200)], fill=(255,0,0,255), width=6)
+
+# 2. الشريط السفلي
+d.polygon([(0,H), (W,H), (W,H-120), (W-50,H-140), (50,H-140), (0,H-120)], fill=(0, 0, 0, 255))
+# الخط الأحمر أعلى الشريط السفلي
+d.line([(50,H-140), (W-50,H-140)], fill=(255,0,0,255), width=6)
+
+# 3. إطار أحمر خارجي
+d.rectangle([(10, 10), (W-10, H-10)], outline=(255,0,0,200), width=6)
+
+# 4. زخارف الزوايا السفلية
+d.line([(10,H-140), (10,H-80), (60,H-80)], fill=(255,0,0,255), width=6)
+d.line([(W-10,H-140), (W-10,H-80), (W-60,H-80)], fill=(255,0,0,255), width=6)
+
+# 5. النص العلوي "بث السجن 30 يوم!"
+f_top = get_font(os.path.expanduser("~/.fonts/Cairo-var.ttf"), 80, 900)
+top_text = "بث السجن 30 يوم!"
+d.text((W//2, 100), top_text, font=f_top, fill=(255,255,255,255), anchor="mm")
+
+# 6. قضبان السجن (يسار)
+for i in range(3):
+    x = 100 + i * 20
+    d.line([(x, 40), (x, 160)], fill=(150, 150, 150, 255), width=4)
+
+# 7. الأصفاد (يمين)
+d.ellipse([(W-200, 50), (W-150, 100)], outline=(150, 150, 150, 255), width=6)
+d.ellipse([(W-120, 50), (W-70, 100)], outline=(150, 150, 150, 255), width=6)
+d.line([(W-150, 75), (W-120, 75)], fill=(150, 150, 150, 255), width=6)
+
+bg.save(os.path.join(WORKDIR, "frame_bg.png"), "PNG")
+PYEOF
+    WORKDIR="$WORKDIR" python3 /tmp/make_frame.py || return 1
+    echo "✅ Live Frame ready"
+}
+
 if [ "${PREPARE_ONLY:-0}" = "1" ]; then
     generate_standby
+    generate_frame_bg
     exit $?
 fi
 
@@ -113,6 +171,7 @@ RESTREAM_KEY="${RESTREAM_KEY:-}"
 RESTREAM_URL="rtmp://live.restream.io/live/$RESTREAM_KEY"
 
 [ ! -f "$WORKDIR/standby.ts" ] && { generate_standby || exit 1; }
+[ ! -f "$WORKDIR/frame_bg.png" ] && { generate_frame_bg || exit 1; }
 
 # ───────────────────────────────────────────────
 #  Process management
@@ -245,21 +304,33 @@ start_prod_standby() {
 
 start_prod_live() {
     rm -f /tmp/prod.prog
+    echo "🚀 Starting LIVE with Frame Overlay..."
+    
+    # دمج البث مع الإطار الصوري + النص المتحرك في الأسفل
     setsid bash -c '
         streamlink --http-header "User-Agent='"$UA"'" "https://kick.com/'"$STREAMER_EN"'" best --stdout 2>/dev/null | \
         ffmpeg -y -hide_banner -loglevel warning -nostdin \
             -thread_queue_size 512 \
             -fflags +genpts+discardcorrupt \
             -i pipe:0 \
-            -c:v copy -c:a aac -b:a 160k -ar 44100 -ac 2 \
+            -loop 1 -i "'"$WORKDIR"'/frame_bg.png" \
+            -filter_complex "\
+                [0:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2[v0]; \
+                [v0][1:v]overlay=0:0[bg]; \
+                [bg]drawtext=fontfile=$HOME/.fonts/Cairo-var.ttf:text='"'"'تكبيس وفولو يارجال  |  والبث مايوقف!  |  تكبيس وفولو يارجال  |  والبث مايوقف!  |  '"'"':x=w-mod(t*150\,w+tw):y=h-105:fontsize=45:fontcolor=white:borderw=2:bordercolor=black[out]" \
+            -map "[out]" -map 0:a? \
+            -c:v libx264 -preset ultrafast -tune zerolatency -crf 24 -pix_fmt yuv420p \
+            -c:a aac -b:a 160k -ar 44100 -ac 2 \
+            -max_muxing_queue_size 4096 \
             -mpegts_flags +resend_headers \
             -progress /tmp/prod.prog -stats_period 1 \
             -f mpegts "'"$FIFO"'" >/tmp/prod.log 2>&1
     ' >/dev/null 2>&1 &
+    
     PROD=$!
     PROD_STARTED=$(date +%s); PROD_PREV_FRAME=""; PROD_STALL=0
     if wait_prod_ready; then
-        MODE="LIVE"; echo "✅ LIVE: $STREAMER_EN"; return 0
+        MODE="LIVE"; echo "✅ LIVE: $STREAMER_EN (With Frame)"; return 0
     fi
     stop_producer
     return 1
@@ -308,7 +379,7 @@ fi
 # ───────────────────────────────────────────────
 #  Boot
 # ───────────────────────────────────────────────
-echo "🚀 Single Streamer Relay V13 starting..."
+echo "🚀 Single Streamer Relay V15 starting..."
 setup_fifo
 start_output_with_retry || { echo "❌ FATAL: initial connect failed"; exit 1; }
 start_keeper || { echo "❌ FATAL: keeper failed"; exit 1; }
@@ -347,7 +418,7 @@ while true; do
         continue
     fi
 
-    # Watchdog: Output stall (Grace period 20s)
+    # Watchdog: Output stall
     if [ $((NOW - OUT_STARTED)) -ge 20 ]; then
         F=$(get_frame /tmp/out.prog)
         MT=$(stat -c %Y /tmp/out.prog 2>/dev/null || echo $OUT_STARTED)
@@ -363,7 +434,7 @@ while true; do
         fi
     fi
 
-    # Watchdog: Producer stall (Grace period 15s)
+    # Watchdog: Producer stall
     if [ $((NOW - PROD_STARTED)) -ge 15 ]; then
         F=$(get_frame /tmp/prod.prog)
         MT=$(stat -c %Y /tmp/prod.prog 2>/dev/null || echo $PROD_STARTED)
