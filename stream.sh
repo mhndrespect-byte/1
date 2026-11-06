@@ -6,8 +6,8 @@ set -uo pipefail
 #  Single Streamer Relay — V15 (Custom Frame + Marquee Text)
 # ═══════════════════════════════════════════════════════════════
 
-STREAMER_EN="${STREAMER_EN:-DRB7H}"
-STREAMER_AR="${STREAMER_AR:-دربحه}"
+STREAMER_EN="${STREAMER_EN:-SXB}"
+STREAMER_AR="${STREAMER_AR:-شونق}"
 UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 WORKDIR="/tmp/standby_relay"
